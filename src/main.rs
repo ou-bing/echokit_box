@@ -290,6 +290,7 @@ fn main() -> anyhow::Result<()> {
         }
     });
 
+    // 使用 Tokio 协程异步运行 i2s_task
     b.spawn(i2s_task);
     b.block_on(async move {
         let r = ws_task.await;

@@ -153,6 +153,7 @@ pub async fn i2s_task_(
 ) {
     let afe_handle = Arc::new(AFE::new());
     let afe_handle_ = afe_handle.clone();
+    // 使用线程异步运行 afe_worker
     let afe_r = std::thread::spawn(|| afe_worker(afe_handle_, tx));
     let r = i2s_player_(i2s, ws, sck, din, i2s1, bclk, lrclk, dout, afe_handle, rx).await;
     if let Err(e) = r {
@@ -160,6 +161,7 @@ pub async fn i2s_task_(
     } else {
         log::info!("I2S test completed successfully");
     }
+    // 由于 afe_worker 处于一个循环中，因此这里会阻塞直到它跳出循环
     let r = afe_r.join().unwrap();
     if let Err(e) = r {
         log::error!("Error: {}", e);
@@ -211,6 +213,7 @@ async fn i2s_player_(
         let data = if speaking {
             rx.recv().await
         } else {
+            // 从通道接收数据 or 采集麦克风输入
             tokio::select! {
                 Some(data) = rx.recv() =>{
                     Some(data)
@@ -408,6 +411,10 @@ async fn i2s_player(
     // Ok(())
 }
 
+/*
+AFE 处理后的数据被传入 tx
+只有 blocking_send 出错才会跳出循环
+*/
 fn afe_worker(afe_handle: Arc<AFE>, tx: MicTx) -> anyhow::Result<()> {
     let mut speech = false;
     loop {

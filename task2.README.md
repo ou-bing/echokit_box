@@ -9,7 +9,11 @@ MIC -> ASR
 
 - 1. 音频数据在 i2s_player_ 中采集并传入 AFE。
 
-- 2. afe_worker 则会接收 AFE 吐出的数据，并传入 main 函数中定义的 evt_tx 通道。
+- 2. afe_worker 函数则会接收 AFE 吐出的数据，并使用 main 函数中定义的 evt_tx 向通道传入数据。
 
-- 3. main_work 监听 MicAudioChunk 和 MicAudioEnd 事件，并将相关数据发送到 ASR Server。
+- 3. main_work 函数使用 main 函数中定义的 evt_rx 读取通道数据，并监听 MicAudioChunk 和 MicAudioEnd 事件，最后将相关数据发送到 ASR Server。
 
+
+## 写入模型
+
+espflash write-bin --baud=921600 0x710000 assets/srmodels.bin

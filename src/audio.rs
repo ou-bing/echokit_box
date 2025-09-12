@@ -40,6 +40,17 @@ unsafe fn afe_init() -> (
     let audio_chunksize = (afe_handle.get_feed_chunksize.unwrap())(afe_data);
     log::info!("audio chunksize: {}", audio_chunksize);
 
+    let mn_name = esp_sr::esp_srmodel_filter(
+        models,
+        esp_sr::ESP_MN_PREFIX.as_ptr(),
+        esp_sr::ESP_MN_CHINESE.as_ptr(),
+    );
+    log::info!("multinet: {:?}", std::ffi::CStr::from_ptr(mn_name).to_str());
+    let multinet = esp_sr::esp_mn_handle_from_name(mn_name);
+    let multinet = multinet.as_ref().unwrap();
+    let model_data = (multinet.create.unwrap())(mn_name, 6000);
+    log::info!("model_data created: {:p}", model_data);
+
     esp_sr::afe_config_free(afe_config);
     (afe_handle, afe_data)
 }

@@ -11,6 +11,8 @@ const PORT_TICK_PERIOD_MS: u32 = 1000 / esp_idf_svc::sys::configTICK_RATE_HZ;
 unsafe fn afe_init() -> (
     *mut esp_sr::esp_afe_sr_iface_t,
     *mut esp_sr::esp_afe_sr_data_t,
+    *mut esp_sr::esp_mn_iface_t,
+    *mut esp_sr::model_iface_data_t,
 ) {
     let models = esp_sr::esp_srmodel_init("model\0".as_ptr() as *const _);
     log::info!("Models loaded successfully: {:?}", models);
@@ -41,23 +43,38 @@ unsafe fn afe_init() -> (
     let audio_chunksize = (afe_handle.get_feed_chunksize.unwrap())(afe_data);
     log::info!("audio chunksize: {}", audio_chunksize);
 
+    // 初始化MultiNet用于命令词检测
     let mn_name = esp_sr::esp_srmodel_filter(
         models,
         esp_sr::ESP_MN_PREFIX.as_ptr(),
         esp_sr::ESP_MN_CHINESE.as_ptr(),
     );
-    let multinet = esp_sr::esp_mn_handle_from_name(mn_name).as_ref().unwrap();
-    let model_data = multinet.create.unwrap()(mn_name, 6000);
-    let mu_chunksize = multinet.get_samp_chunksize.unwrap()(model_data);
+    let multinet = esp_sr::esp_mn_handle_from_name(mn_name).as_mut().unwrap();
+    let model_data = (multinet.create.unwrap())(mn_name, 6000);
+    let mu_chunksize = (multinet.get_samp_chunksize.unwrap())(model_data);
     esp_sr::esp_mn_commands_update_from_sdkconfig(multinet, model_data);
 
+    log::info!("MultiNet initialized, chunk size: {}", mu_chunksize);
+
+    // 确保AFE和MultiNet的chunk size一致
+    let afe_chunksize = (afe_handle.get_fetch_chunksize.unwrap())(afe_data);
+    if mu_chunksize != afe_chunksize as i32 {
+        log::warn!(
+            "Warning: AFE chunk size ({}) != MultiNet chunk size ({})",
+            afe_chunksize,
+            mu_chunksize
+        );
+    }
+
     esp_sr::afe_config_free(afe_config);
-    (afe_handle, afe_data)
+    (afe_handle, afe_data, multinet, model_data)
 }
 
 struct AFE {
     handle: *mut esp_sr::esp_afe_sr_iface_t,
     data: *mut esp_sr::esp_afe_sr_data_t,
+    multinet: *mut esp_sr::esp_mn_iface_t,
+    model_data: *mut esp_sr::model_iface_data_t,
     #[allow(unused)]
     feed_chunksize: usize,
 }
@@ -68,18 +85,21 @@ unsafe impl Sync for AFE {}
 struct AFEResult {
     data: Vec<u8>,
     speech: bool,
+    phrase_id: Option<i32>,
 }
 
 impl AFE {
     fn new() -> Self {
         unsafe {
-            let (handle, data) = afe_init();
+            let (handle, data, multinet, model_data) = afe_init();
             let feed_chunksize =
                 (handle.as_mut().unwrap().get_feed_chunksize.unwrap())(data) as usize;
 
             AFE {
                 handle,
                 data,
+                multinet,
+                model_data,
                 feed_chunksize,
             }
         }
@@ -117,6 +137,8 @@ impl AFE {
 
             let data_size = result.data_size;
             let vad_state = result.vad_state;
+            let wakeup_state = result.wakeup_state;
+            
             let mut data = Vec::with_capacity(data_size as usize + result.vad_cache_size as usize);
             if result.vad_cache_size > 0 {
                 let data_ptr = result.vad_cache as *const u8;
@@ -130,7 +152,10 @@ impl AFE {
             };
 
             let speech = vad_state == esp_sr::vad_state_t_VAD_SPEECH;
-            Ok(AFEResult { data, speech })
+
+            self.multinet.create();
+
+            Ok(AFEResult { data, speech, phrase_id })
         }
     }
 }
@@ -428,7 +453,7 @@ AFE 处理后的数据被传入 tx
 */
 fn afe_worker(afe_handle: Arc<AFE>, tx: MicTx) -> anyhow::Result<()> {
     let mut speech = false;
-    
+
     loop {
         let result = afe_handle.fetch();
         if let Err(_e) = &result {

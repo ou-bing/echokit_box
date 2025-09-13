@@ -13,6 +13,7 @@ pub enum Event {
     ServerEvent(ServerEvent),
     MicAudioChunk(Vec<u8>),
     MicAudioEnd,
+    Phrase(i32),
 }
 
 #[allow(dead_code)]
@@ -45,6 +46,9 @@ async fn select_evt(evt_rx: &mut mpsc::Receiver<Event>, server: &mut Server) -> 
                 },
                 Event::ServerEvent(_)=>{
                     log::info!("Received ServerEvent: {:?}", evt);
+                },
+                Event::Phrase(_)=>{
+                    log::info!("Received Phrase: {:?}", evt);
                 },
             }
             Some(evt)
@@ -353,6 +357,9 @@ pub async fn main_work<'d>(
                 }
             }
             Event::ServerEvent(ServerEvent::StartVideo | ServerEvent::EndVideo) => {}
+            Event::Phrase(phrase_id) => {
+                log::info!("main_work phrase id: {:?}", phrase_id);
+            }
         }
     }
 

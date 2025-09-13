@@ -455,9 +455,14 @@ fn afe_worker(afe_handle: Arc<AFE>, tx: MicTx) -> anyhow::Result<()> {
         if let Err(_e) = &result {
             continue;
         }
+
         let result = result.unwrap();
-        if result.phrase_id.is_some() {
-            log::info!("Wake word detected: {:?}", result.phrase_id);
+        match result.phrase_id {
+            Some(phrase_id) => {
+                tx.blocking_send(crate::app::Event::Phrase(phrase_id))
+                    .map_err(|_| anyhow::anyhow!("Failed to send data"))?;
+            }
+            None => {}
         }
         if result.data.is_empty() {
             continue;

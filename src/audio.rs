@@ -137,8 +137,7 @@ impl AFE {
 
             let data_size = result.data_size;
             let vad_state = result.vad_state;
-            let wakeup_state = result.wakeup_state;
-            
+
             let mut data = Vec::with_capacity(data_size as usize + result.vad_cache_size as usize);
             if result.vad_cache_size > 0 {
                 let data_ptr = result.vad_cache as *const u8;
@@ -153,9 +152,27 @@ impl AFE {
 
             let speech = vad_state == esp_sr::vad_state_t_VAD_SPEECH;
 
-            self.multinet.create();
+            if speech {
+                log::info!("VAD speech detected, data size: {}", data.len());
+            }
 
-            Ok(AFEResult { data, speech, phrase_id })
+            // 使用MultiNet进行命令词检测
+            let mut phrase_id = None;
+            if speech && data.len() > 0 {
+                let multinet_handle = self.multinet.as_ref().unwrap();
+                let ms_state =
+                    multinet_handle.detect.unwrap()(self.model_data, data.as_ptr() as *mut i16);
+                log::info!("MultiNet ms_state: {:?}", ms_state);
+                // if detect_result == esp_sr::ESP_MN_STATE_DETECTED {
+                //     log::info!("Wake word detected!");
+                // }
+            }
+
+            Ok(AFEResult {
+                data,
+                speech,
+                phrase_id,
+            })
         }
     }
 }

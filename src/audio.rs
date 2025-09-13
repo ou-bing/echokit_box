@@ -149,7 +149,6 @@ impl AFE {
             let multinet = self.multinet.as_ref().unwrap();
             let mn_state = multinet.detect.unwrap()(self.model_data, data.as_ptr() as *mut i16);
             if mn_state == esp_sr::esp_mn_state_t_ESP_MN_STATE_DETECTED {
-                log::info!("Phrase detected!");
                 let mn_result = multinet.get_results.unwrap()(self.model_data);
                 phrase_id = mn_result.as_ref().unwrap().phrase_id.get(0).cloned();
                 log::info!("Detected phrase id: {:?}", phrase_id);

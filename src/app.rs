@@ -47,8 +47,8 @@ async fn select_evt(evt_rx: &mut mpsc::Receiver<Event>, server: &mut Server) -> 
                 Event::ServerEvent(_)=>{
                     log::info!("Received ServerEvent: {:?}", evt);
                 },
-                Event::Phrase(_)=>{
-                    log::info!("Received Phrase: {:?}", evt);
+                Event::Phrase(phrase_id)=>{
+                    log::info!("Received PhraseEvent: {:?}", phrase_id);
                 },
             }
             Some(evt)
@@ -358,7 +358,15 @@ pub async fn main_work<'d>(
             }
             Event::ServerEvent(ServerEvent::StartVideo | ServerEvent::EndVideo) => {}
             Event::Phrase(phrase_id) => {
-                log::info!("main_work phrase id: {:?}", phrase_id);
+                if phrase_id == 1 && state == State::Idle {
+                    state = State::Listening;
+                    gui.state = "Listening...".to_string();
+                    gui.display_flush().unwrap();
+                } else if phrase_id == 2 && state == State::Listening {
+                    state = State::Idle;
+                    gui.state = "Idle".to_string();
+                    gui.display_flush().unwrap();
+                }
             }
         }
     }

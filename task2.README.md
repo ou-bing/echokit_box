@@ -14,6 +14,13 @@ MIC -> ASR
 - 3. main_work 函数使用 main 函数中定义的 evt_rx 读取通道数据，并监听 MicAudioChunk 和 MicAudioEnd 事件，最后将相关数据发送到 ASR Server。
 
 
+
+
+
 ## 写入模型
 
 espflash write-bin --baud=921600 0x710000 assets/srmodels.bin
+
+## 使用分区表
+
+espflash flash --baud=921600 --monitor --flash-size 16mb --partition-table partitions.csv target/xtensa-esp32s3-espidf/debug/echokit

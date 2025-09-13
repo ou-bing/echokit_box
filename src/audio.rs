@@ -13,6 +13,7 @@ unsafe fn afe_init() -> (
     *mut esp_sr::esp_afe_sr_data_t,
 ) {
     let models = esp_sr::esp_srmodel_init("model\0".as_ptr() as *const _);
+    log::info!("Models loaded successfully: {:?}", models);
     let afe_config = esp_sr::afe_config_init(
         "M\0".as_ptr() as _,
         models,
@@ -45,11 +46,17 @@ unsafe fn afe_init() -> (
         esp_sr::ESP_MN_PREFIX.as_ptr(),
         esp_sr::ESP_MN_CHINESE.as_ptr(),
     );
-    log::info!("multinet: {:?}", std::ffi::CStr::from_ptr(mn_name).to_str());
-    let multinet = esp_sr::esp_mn_handle_from_name(mn_name);
-    let multinet = multinet.as_ref().unwrap();
-    let model_data = (multinet.create.unwrap())(mn_name, 6000);
-    log::info!("model_data created: {:p}", model_data);
+    log::info!(
+        "multinet_name: {}",
+        std::ffi::CStr::from_ptr(mn_name).to_str().unwrap()
+    );
+    let multinet = esp_sr::esp_mn_handle_from_name(mn_name).as_ref().unwrap();
+    log::info!("multinet: {:?}", multinet);
+    let model_data = multinet.create.unwrap()(mn_name, 6000);
+
+    // let multinet = multinet;
+    // let model_data = (multinet.create.unwrap())(mn_name, 6000);
+    // log::info!("model_data created: {:p}", model_data);
 
     esp_sr::afe_config_free(afe_config);
     (afe_handle, afe_data)

@@ -79,6 +79,7 @@ unsafe impl Sync for AFE {}
 struct AFEResult {
     data: Vec<u8>,
     speech: bool,
+    phrase_id: Option<i32>,
 }
 
 impl AFE {
@@ -143,7 +144,22 @@ impl AFE {
             };
 
             let speech = vad_state == esp_sr::vad_state_t_VAD_SPEECH;
-            Ok(AFEResult { data, speech })
+
+            let mut phrase_id = None;
+            let multinet = self.multinet.as_ref().unwrap();
+            let mn_state = multinet.detect.unwrap()(self.model_data, data.as_ptr() as *mut i16);
+            if mn_state == esp_sr::esp_mn_state_t_ESP_MN_STATE_DETECTED {
+                log::info!("Phrase detected!");
+                let mn_result = multinet.get_results.unwrap()(self.model_data);
+                phrase_id = mn_result.as_ref().unwrap().phrase_id.get(0).cloned();
+                log::info!("Detected phrase id: {:?}", phrase_id);
+            }
+
+            Ok(AFEResult {
+                data,
+                speech,
+                phrase_id,
+            })
         }
     }
 }
@@ -440,6 +456,9 @@ fn afe_worker(afe_handle: Arc<AFE>, tx: MicTx) -> anyhow::Result<()> {
             continue;
         }
         let result = result.unwrap();
+        if result.phrase_id.is_some() {
+            log::info!("Wake word detected: {:?}", result.phrase_id);
+        }
         if result.data.is_empty() {
             continue;
         }
